@@ -1,0 +1,79 @@
+# =============================================================================
+# Extratos de Aplicações — Compose de PRODUÇÃO (Coolify)
+# =============================================================================
+# O Coolify lê este arquivo da raiz do repositório (Build Pack: Docker Compose).
+# Só o serviço `frontend` é público: aponte o domínio
+#   aplicacoes.nucleodigital.cloud
+# para ele na aba "Domains" do serviço no Coolify (porta 80). O frontend (nginx)
+# faz proxy de /api → backend pela rede interna; backend e postgres NÃO ficam
+# expostos na internet.
+#
+# Variáveis de ambiente: defina na aba "Environment Variables" do Coolify
+# (ver .env.example). Segredos (ANTHROPIC_API_KEY, EMAIL_CLIENT_SECRET, senha do
+# banco) nunca vão para o repositório.
+#
+# Para desenvolvimento local use docker/docker-compose.yml (Postgres + MinIO).
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-extratos}
+      POSTGRES_USER: ${DB_USER:-extratos}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-extratos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-extratos}
+      DB_USER: ${DB_USER:-extratos}
+      DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD}
+      # Claude (só no backend)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?defina ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      # Storage em filesystem (volume persistente)
+      STORAGE_TYPE: fs
+      STORAGE_BASE_PATH: /app/storage
+      # CORS: o frontend chama /api na mesma origem (via nginx), mas mantemos a
+      # origem pública liberada por segurança.
+      CORS_ALLOWED_ORIGINS: ${PUBLIC_URL:-https://aplicacoes.nucleodigital.cloud}
+      # Ingestão por e-mail (Gmail OAuth) — §13
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-true}
+      EMAIL_CLIENT_ID: ${EMAIL_CLIENT_ID:-}
+      EMAIL_CLIENT_SECRET: ${EMAIL_CLIENT_SECRET:-}
+      EMAIL_REDIRECT_URI: ${EMAIL_REDIRECT_URI:-https://aplicacoes.nucleodigital.cloud/api/email/oauth/callback}
+      EMAIL_QUERY: ${EMAIL_QUERY:-}
+      EMAIL_POLL_INTERVAL_MS: ${EMAIL_POLL_INTERVAL_MS:-300000}
+    volumes:
+      - storage:/app/storage
+    expose:
+      - "8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    # Serviço público: configure o domínio aplicacoes.nucleodigital.cloud na
+    # aba "Domains" do Coolify apontando para a porta 80.
+    expose:
+      - "80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  storage:

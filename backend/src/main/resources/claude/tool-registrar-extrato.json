@@ -1,0 +1,47 @@
+{
+  "name": "registrar_extrato",
+  "description": "Registra os dados extraídos de um extrato de aplicações financeiras.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "documento_reconhecido": { "type": "boolean", "description": "false se o PDF não for um extrato de aplicação financeira" },
+      "banco": { "type": "string", "description": "Nome curto do banco, ex.: CAIXA, SANTANDER, SICOOB" },
+      "cliente_nome": { "type": ["string","null"] },
+      "cliente_cnpj": { "type": ["string","null"], "description": "Somente dígitos" },
+      "agencia": { "type": ["string","null"] },
+      "conta": { "type": ["string","null"] },
+      "competencia": { "type": "string", "description": "AAAA-MM" },
+      "data_posicao": { "type": ["string","null"], "description": "AAAA-MM-DD" },
+      "total_bruto_informado": { "type": ["number","null"] },
+      "observacoes": { "type": ["string","null"] },
+      "aplicacoes": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "identificador": { "type": "string" },
+            "produto": { "type": ["string","null"] },
+            "detalhado": { "type": "boolean", "description": "false quando o extrato não detalha a aplicação" },
+            "data_aplicacao": { "type": ["string","null"] },
+            "data_vencimento": { "type": ["string","null"] },
+            "indexador": { "type": ["string","null"] },
+            "saldo_inicial_bruto": { "type": ["number","null"] },
+            "saldo_inicial_liquido": { "type": ["number","null"] },
+            "aplicacoes": { "type": ["number","null"] },
+            "resgates_brutos": { "type": ["number","null"] },
+            "resgates_liquidos": { "type": ["number","null"] },
+            "rendimento_bruto": { "type": ["number","null"] },
+            "ir_retido": { "type": ["number","null"] },
+            "iof_retido": { "type": ["number","null"] },
+            "ir_provisionado": { "type": ["number","null"] },
+            "iof_provisionado": { "type": ["number","null"] },
+            "saldo_final_bruto": { "type": ["number","null"] },
+            "saldo_final_liquido": { "type": ["number","null"] }
+          },
+          "required": ["identificador", "detalhado", "saldo_inicial_bruto", "aplicacoes", "resgates_brutos", "rendimento_bruto", "ir_retido", "iof_retido", "saldo_final_bruto"]
+        }
+      }
+    },
+    "required": ["documento_reconhecido", "banco", "competencia", "aplicacoes"]
+  }
+}
