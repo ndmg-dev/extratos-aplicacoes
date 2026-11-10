@@ -61,7 +61,8 @@ public class GoogleDriveService {
                 ? d.getNomePadronizado()
                 : (d.getNomeArquivoOriginal() != null ? d.getNomeArquivoOriginal() : "extrato.pdf");
 
-        String pastaAno = acharOuCriarPasta(accessToken, ano, pastaRaizId);
+        String raiz = normalizarFolderId(pastaRaizId);
+        String pastaAno = acharOuCriarPasta(accessToken, ano, raiz);
         String pastaMes = acharOuCriarPasta(accessToken, mes, pastaAno);
         String pastaCnpj = acharOuCriarPasta(accessToken, cnpj, pastaMes);
 
@@ -189,6 +190,34 @@ public class GoogleDriveService {
             return files.get(0).get("id").asText();
         }
         return null;
+    }
+
+    /**
+     * Aceita tanto o ID puro quanto a URL da pasta colada inteira
+     * (ex.: https://drive.google.com/drive/folders/&lt;ID&gt;?usp=drive_link) e devolve só o ID.
+     */
+    static String normalizarFolderId(String v) {
+        if (v == null) {
+            return null;
+        }
+        String s = v.trim();
+        int i = s.indexOf("/folders/");
+        if (i >= 0) {
+            s = s.substring(i + "/folders/".length());
+        }
+        int q = s.indexOf('?');
+        if (q >= 0) {
+            s = s.substring(0, q);
+        }
+        int h = s.indexOf('#');
+        if (h >= 0) {
+            s = s.substring(0, h);
+        }
+        int sl = s.indexOf('/');
+        if (sl >= 0) {
+            s = s.substring(0, sl);
+        }
+        return s;
     }
 
     private static String fatia(String s, int ini, int fim, String fallback) {
