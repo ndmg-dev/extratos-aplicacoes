@@ -137,7 +137,12 @@ public class EmailIngestorService {
             return;
         }
         try {
-            drive.arquivar(accessToken, props.driveFolderId(), r.documento(), pdf);
+            String clienteNome = r.lancamentos().stream()
+                    .map(l -> l.getClienteNome())
+                    .filter(n -> n != null && !n.isBlank())
+                    .findFirst()
+                    .orElse(null);
+            drive.arquivar(accessToken, props.driveFolderId(), r.documento(), clienteNome, pdf);
         } catch (RuntimeException e) {
             log.error("Falha ao arquivar no Drive (documento_id={}): {}",
                     r.documento().getId(), e.getMessage());

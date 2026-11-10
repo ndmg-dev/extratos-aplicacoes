@@ -53,10 +53,11 @@ public class GoogleDriveService {
      * @param pdf         bytes do PDF
      * @return id do arquivo no Drive (novo ou já existente), ou {@code null} se não arquivou
      */
-    public String arquivar(String accessToken, String pastaRaizId, Documento d, byte[] pdf) {
+    public String arquivar(String accessToken, String pastaRaizId, Documento d, String clienteNome, byte[] pdf) {
         String ano = fatia(d.getCompetencia(), 0, 4, "SEM_ANO");
         String mes = fatia(d.getCompetencia(), 5, 7, "SEM_MES");
-        String cnpj = (d.getCnpj() != null && !d.getCnpj().isBlank()) ? d.getCnpj() : "_SEM_CNPJ";
+        // Pasta do cliente: CNPJ quando houver; senão o nome da empresa; senão _SEM_CNPJ.
+        String cliente = nomePastaCliente(d.getCnpj(), clienteNome);
         String nome = (d.getNomePadronizado() != null && !d.getNomePadronizado().isBlank())
                 ? d.getNomePadronizado()
                 : (d.getNomeArquivoOriginal() != null ? d.getNomeArquivoOriginal() : "extrato.pdf");
@@ -64,16 +65,36 @@ public class GoogleDriveService {
         String raiz = normalizarFolderId(pastaRaizId);
         String pastaAno = acharOuCriarPasta(accessToken, ano, raiz);
         String pastaMes = acharOuCriarPasta(accessToken, mes, pastaAno);
-        String pastaCnpj = acharOuCriarPasta(accessToken, cnpj, pastaMes);
+        String pastaCliente = acharOuCriarPasta(accessToken, cliente, pastaMes);
 
-        String existente = acharArquivo(accessToken, nome, pastaCnpj);
+        String existente = acharArquivo(accessToken, nome, pastaCliente);
         if (existente != null) {
-            log.debug("Drive: '{}' já existe em {}/{}/{} — não reenviado.", nome, ano, mes, cnpj);
+            log.debug("Drive: '{}' já existe em {}/{}/{} — não reenviado.", nome, ano, mes, cliente);
             return existente;
         }
-        String id = subirPdf(accessToken, nome, pdf, pastaCnpj);
-        log.info("Drive: arquivado '{}' em {}/{}/{} (fileId={}).", nome, ano, mes, cnpj, id);
+        String id = subirPdf(accessToken, nome, pdf, pastaCliente);
+        log.info("Drive: arquivado '{}' em {}/{}/{} (fileId={}).", nome, ano, mes, cliente, id);
         return id;
+    }
+
+    /** Nome da pasta do cliente: CNPJ (se houver) → nome da empresa (sanitizado) → _SEM_CNPJ. */
+    static String nomePastaCliente(String cnpj, String clienteNome) {
+        if (cnpj != null && !cnpj.isBlank()) {
+            return cnpj;
+        }
+        if (clienteNome != null && !clienteNome.isBlank()) {
+            String limpo = clienteNome.trim()
+                    .replaceAll("[\\\\/\\r\\n\\t]", " ")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+            if (limpo.length() > 100) {
+                limpo = limpo.substring(0, 100).trim();
+            }
+            if (!limpo.isEmpty()) {
+                return limpo;
+            }
+        }
+        return "_SEM_CNPJ";
     }
 
     // ---- pastas -------------------------------------------------------------------------
