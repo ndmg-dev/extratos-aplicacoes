@@ -30,7 +30,7 @@ public record EmailProperties(
         String clientId,
         String clientSecret,
         @DefaultValue("http://localhost:8080/api/email/oauth/callback") String redirectUri,
-        @DefaultValue("https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive")
+        @DefaultValue("https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive")
         String scope,
         @DefaultValue("extrato,aplicação,aplicacao,posição,posicao,investimento,rendimento")
         List<String> subjectKeywords,
@@ -41,7 +41,9 @@ public record EmailProperties(
         @DefaultValue("20000") long timeoutMs,
         // Arquivamento no Google Drive (pasta APLICAÇÕES → ANO/MÊS/CNPJ).
         @DefaultValue("false") boolean driveEnabled,
-        String driveFolderId
+        String driveFolderId,
+        // Label aplicada no Gmail aos e-mails já processados (excluídos das próximas buscas).
+        @DefaultValue("Extratos processados") String processedLabel
 ) {
 
     /** Credenciais OAuth presentes (necessárias para qualquer operação). */

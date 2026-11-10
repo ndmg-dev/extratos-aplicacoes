@@ -79,6 +79,9 @@ public class EmailIngestorService {
                 }
             }
 
+            // Resolve (ou cria) a label de "processado" uma vez por ciclo (best-effort).
+            String labelId = resolverLabel(accessToken);
+
             String query = montarQuery();
             List<String> ids = gmail.listarIds(accessToken, query, props.maxPorCiclo());
             log.info("Ingestão e-mail: {} mensagens candidatas (query='{}').", ids.size(), query);
@@ -87,7 +90,7 @@ public class EmailIngestorService {
                 if (processadasRepo.existsById(id)) {
                     continue;
                 }
-                documentos += processarMensagem(accessToken, id);
+                documentos += processarMensagem(accessToken, id, labelId);
                 novos++;
             }
         } catch (RuntimeException e) {
@@ -99,7 +102,7 @@ public class EmailIngestorService {
         return new EmailSyncResultado(novos, documentos, erro);
     }
 
-    private int processarMensagem(String accessToken, String id) {
+    private int processarMensagem(String accessToken, String id, String labelId) {
         GmailMensagem msg = gmail.buscarMensagem(accessToken, id);
         List<GmailAnexo> pdfs = msg.anexosPdf();
         int ok = 0;
@@ -123,9 +126,36 @@ public class EmailIngestorService {
                 : ok == 0 ? "ERRO"
                 : "PARCIAL";
         marcarProcessada(msg, statusMsg);
+        marcarNoGmail(accessToken, msg.id(), labelId);
         log.info("E-mail processado message_id={} remetente='{}' pdfs={} ok={} falhas={} status={}",
                 msg.id(), msg.remetente(), pdfs.size(), ok, falhas, statusMsg);
         return ok;
+    }
+
+    /** Resolve/cria a label de "processado" (best-effort; null se indisponível). */
+    private String resolverLabel(String accessToken) {
+        String nome = props.processedLabel();
+        if (nome == null || nome.isBlank()) {
+            return null;
+        }
+        try {
+            return gmail.acharOuCriarLabel(accessToken, nome);
+        } catch (RuntimeException e) {
+            log.warn("Não foi possível resolver a label '{}': {}", nome, e.getMessage());
+            return null;
+        }
+    }
+
+    /** Aplica a label no Gmail (best-effort): marca o e-mail como processado, excluindo-o das buscas. */
+    private void marcarNoGmail(String accessToken, String messageId, String labelId) {
+        if (labelId == null) {
+            return;
+        }
+        try {
+            gmail.aplicarLabel(accessToken, messageId, labelId);
+        } catch (RuntimeException e) {
+            log.error("Falha ao etiquetar e-mail message_id={}: {}", messageId, e.getMessage());
+        }
     }
 
     /**
@@ -155,11 +185,22 @@ public class EmailIngestorService {
                 msg.anexosPdf().size(), statusMsg));
     }
 
-    /** Monta a query do Gmail: anexo PDF + assunto com palavras-chave + janela de retrospecto. */
+    /**
+     * Monta a query do Gmail: anexo PDF + assunto, **excluindo os já etiquetados** como processados
+     * (robustez: não re-puxa mesmo que a tabela de controle seja zerada).
+     */
     String montarQuery() {
-        if (props.query() != null && !props.query().isBlank()) {
-            return props.query();
+        String base = (props.query() != null && !props.query().isBlank())
+                ? props.query()
+                : construirBaseQuery();
+        String label = props.processedLabel();
+        if (label != null && !label.isBlank()) {
+            base = base + " -label:\"" + label + "\"";
         }
+        return base;
+    }
+
+    private String construirBaseQuery() {
         StringBuilder q = new StringBuilder("has:attachment filename:pdf");
         if (props.lookbackDays() > 0) {
             q.append(" newer_than:").append(props.lookbackDays()).append("d");

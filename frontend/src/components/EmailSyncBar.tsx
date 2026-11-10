@@ -69,11 +69,21 @@ export function EmailSyncBar() {
           )}
         </span>
       )}
-      {temErro && (
-        <span className="ml-auto truncate text-2xs text-erro" title={data.ultimoErro ?? ""}>
-          erro: {data.ultimoErro}
-        </span>
-      )}
+      <div className="ml-auto flex items-center gap-3">
+        {temErro && (
+          <span className="max-w-[20rem] truncate text-2xs text-erro" title={data.ultimoErro ?? ""}>
+            erro: {data.ultimoErro}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={abrirAutorizacao}
+          disabled={autorizar.isPending}
+          className="text-2xs text-ink3 underline-offset-2 hover:text-ink hover:underline"
+        >
+          {autorizar.isPending ? "Abrindo…" : "Reautorizar"}
+        </button>
+      </div>
     </Barra>
   );
 }

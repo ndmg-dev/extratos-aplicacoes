@@ -2,6 +2,7 @@ package com.mendoncagalvao.extratos.email;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mendoncagalvao.extratos.config.EmailProperties;
 import com.mendoncagalvao.extratos.email.model.GmailAnexo;
 import com.mendoncagalvao.extratos.email.model.GmailMensagem;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Cliente REST da Gmail API (§13) — sem SDK, no mesmo estilo do {@code ClaudeClient}.
@@ -31,6 +33,8 @@ public class GmailClient {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final RestClient http;
+    // Cache do id da label por nome (evita listar as labels a cada mensagem).
+    private final ConcurrentHashMap<String, String> cacheLabels = new ConcurrentHashMap<>();
 
     public GmailClient(EmailProperties props) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
@@ -43,6 +47,40 @@ public class GmailClient {
     public String emailDaConta(String accessToken) {
         JsonNode node = getJson(accessToken, b -> b.path("/profile").build());
         return texto(node, "emailAddress");
+    }
+
+    /** Resolve o id de uma label pelo nome, criando-a se não existir (escopo gmail.modify). */
+    public String acharOuCriarLabel(String accessToken, String nome) {
+        String cacheado = cacheLabels.get(nome);
+        if (cacheado != null) {
+            return cacheado;
+        }
+        JsonNode node = getJson(accessToken, b -> b.path("/labels").build());
+        JsonNode arr = node.get("labels");
+        if (arr != null && arr.isArray()) {
+            for (JsonNode l : arr) {
+                if (nome.equals(texto(l, "name"))) {
+                    String id = texto(l, "id");
+                    cacheLabels.put(nome, id);
+                    return id;
+                }
+            }
+        }
+        ObjectNode body = mapper.createObjectNode();
+        body.put("name", nome);
+        body.put("labelListVisibility", "labelShow");
+        body.put("messageListVisibility", "show");
+        JsonNode criada = postJson(accessToken, "/labels", body.toString());
+        String id = criada.get("id").asText();
+        cacheLabels.put(nome, id);
+        return id;
+    }
+
+    /** Aplica uma label a uma mensagem (marca como processada). */
+    public void aplicarLabel(String accessToken, String messageId, String labelId) {
+        ObjectNode body = mapper.createObjectNode();
+        body.putArray("addLabelIds").add(labelId);
+        postJson(accessToken, "/messages/" + messageId + "/modify", body.toString());
     }
 
     /** Ids das mensagens que casam a query (mais recentes primeiro). */
@@ -133,6 +171,26 @@ public class GmailClient {
                     .retrieve()
                     .body(String.class);
             return mapper.readTree(corpo);
+        } catch (RestClientResponseException e) {
+            throw new EmailException(
+                    "Gmail API " + e.getStatusCode().value() + ": " + mensagemErro(e.getResponseBodyAsString()), e);
+        } catch (EmailException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new EmailException("Falha ao chamar a Gmail API: " + e.getMessage(), e);
+        }
+    }
+
+    private JsonNode postJson(String accessToken, String path, String json) {
+        try {
+            String corpo = http.post()
+                    .uri(path)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(json)
+                    .retrieve()
+                    .body(String.class);
+            return corpo == null || corpo.isBlank() ? mapper.createObjectNode() : mapper.readTree(corpo);
         } catch (RestClientResponseException e) {
             throw new EmailException(
                     "Gmail API " + e.getStatusCode().value() + ": " + mensagemErro(e.getResponseBodyAsString()), e);
