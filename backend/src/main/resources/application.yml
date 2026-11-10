@@ -60,13 +60,16 @@ email:
   client-id: ${EMAIL_CLIENT_ID:}
   client-secret: ${EMAIL_CLIENT_SECRET:}
   redirect-uri: ${EMAIL_REDIRECT_URI:http://localhost:8080/api/email/oauth/callback}
-  scope: ${EMAIL_SCOPE:https://www.googleapis.com/auth/gmail.readonly}
+  scope: ${EMAIL_SCOPE:https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive}
   subject-keywords: ${EMAIL_SUBJECT_KEYWORDS:extrato,aplicação,aplicacao,posição,posicao,investimento,rendimento}
   lookback-days: ${EMAIL_LOOKBACK_DAYS:30}
   poll-interval-ms: ${EMAIL_POLL_INTERVAL_MS:300000}
   query: ${EMAIL_QUERY:}
   max-por-ciclo: ${EMAIL_MAX_POR_CICLO:50}
   timeout-ms: ${EMAIL_TIMEOUT_MS:20000}
+  # Arquivamento no Google Drive (pasta APLICAÇÕES → ANO/MÊS/CNPJ)
+  drive-enabled: ${EMAIL_DRIVE_ENABLED:false}
+  drive-folder-id: ${EMAIL_DRIVE_FOLDER_ID:}
 
 # CORS (§7) — origem do frontend em dev
 cors:

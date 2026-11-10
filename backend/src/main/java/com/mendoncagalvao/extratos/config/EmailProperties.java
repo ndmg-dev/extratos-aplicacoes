@@ -30,18 +30,27 @@ public record EmailProperties(
         String clientId,
         String clientSecret,
         @DefaultValue("http://localhost:8080/api/email/oauth/callback") String redirectUri,
-        @DefaultValue("https://www.googleapis.com/auth/gmail.readonly") String scope,
+        @DefaultValue("https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive")
+        String scope,
         @DefaultValue("extrato,aplicação,aplicacao,posição,posicao,investimento,rendimento")
         List<String> subjectKeywords,
         @DefaultValue("30") int lookbackDays,
         @DefaultValue("300000") long pollIntervalMs,
         String query,
         @DefaultValue("50") int maxPorCiclo,
-        @DefaultValue("20000") long timeoutMs
+        @DefaultValue("20000") long timeoutMs,
+        // Arquivamento no Google Drive (pasta APLICAÇÕES → ANO/MÊS/CNPJ).
+        @DefaultValue("false") boolean driveEnabled,
+        String driveFolderId
 ) {
 
     /** Credenciais OAuth presentes (necessárias para qualquer operação). */
     public boolean temCredenciais() {
         return clientId != null && !clientId.isBlank() && clientSecret != null && !clientSecret.isBlank();
+    }
+
+    /** Arquivamento no Drive habilitado e configurado. */
+    public boolean driveConfigurado() {
+        return driveEnabled && driveFolderId != null && !driveFolderId.isBlank();
     }
 }

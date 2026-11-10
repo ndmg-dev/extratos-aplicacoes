@@ -7,6 +7,7 @@ import com.mendoncagalvao.extratos.email.model.GmailMensagem;
 import com.mendoncagalvao.extratos.extracao.ArquivoUpload;
 import com.mendoncagalvao.extratos.extracao.ExtracaoService;
 import com.mendoncagalvao.extratos.extracao.Proveniencia;
+import com.mendoncagalvao.extratos.extracao.ResultadoProcessamento;
 import com.mendoncagalvao.extratos.repository.EmailMensagemProcessadaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,18 +34,20 @@ public class EmailIngestorService {
     private final ExtracaoService extracaoService;
     private final EmailMensagemProcessadaRepository processadasRepo;
     private final EmailSyncStatus status;
+    private final GoogleDriveService drive;
     private final Clock clock;
 
     public EmailIngestorService(EmailProperties props, GmailOAuthService oauth, GmailClient gmail,
                                 ExtracaoService extracaoService,
                                 EmailMensagemProcessadaRepository processadasRepo,
-                                EmailSyncStatus status, Clock clock) {
+                                EmailSyncStatus status, GoogleDriveService drive, Clock clock) {
         this.props = props;
         this.oauth = oauth;
         this.gmail = gmail;
         this.extracaoService = extracaoService;
         this.processadasRepo = processadasRepo;
         this.status = status;
+        this.drive = drive;
         this.clock = clock;
     }
 
@@ -99,21 +102,46 @@ public class EmailIngestorService {
     private int processarMensagem(String accessToken, String id) {
         GmailMensagem msg = gmail.buscarMensagem(accessToken, id);
         List<GmailAnexo> pdfs = msg.anexosPdf();
-        int docs = 0;
-        try {
-            for (GmailAnexo anexo : pdfs) {
+        int ok = 0;
+        int falhas = 0;
+        // Isola cada anexo: um PDF com problema não derruba os demais do mesmo e-mail.
+        for (GmailAnexo anexo : pdfs) {
+            try {
                 Proveniencia prov = Proveniencia.email(msg.id(), msg.remetente(), msg.assunto(), msg.data());
-                extracaoService.processar(ArquivoUpload.email(anexo.nomeArquivo(), anexo.conteudo(), prov));
-                docs++;
+                ResultadoProcessamento r = extracaoService.processar(
+                        ArquivoUpload.email(anexo.nomeArquivo(), anexo.conteudo(), prov));
+                arquivarNoDrive(accessToken, r, anexo.conteudo());
+                ok++;
+            } catch (RuntimeException e) {
+                falhas++;
+                log.error("Falha ao processar anexo '{}' do e-mail message_id={}: {}",
+                        anexo.nomeArquivo(), msg.id(), e.getMessage());
             }
-            marcarProcessada(msg, pdfs.size() == 0 ? "SEM_PDF" : "OK");
-            log.info("E-mail processado message_id={} remetente='{}' pdfs={}", msg.id(), msg.remetente(), pdfs.size());
-        } catch (RuntimeException e) {
-            // Marca como ERRO para não ficar reprocessando em loop; o problema fica registrado.
-            marcarProcessada(msg, "ERRO");
-            log.error("Falha ao processar e-mail message_id={}: {}", msg.id(), e.getMessage());
         }
-        return docs;
+        String statusMsg = pdfs.isEmpty() ? "SEM_PDF"
+                : falhas == 0 ? "OK"
+                : ok == 0 ? "ERRO"
+                : "PARCIAL";
+        marcarProcessada(msg, statusMsg);
+        log.info("E-mail processado message_id={} remetente='{}' pdfs={} ok={} falhas={} status={}",
+                msg.id(), msg.remetente(), pdfs.size(), ok, falhas, statusMsg);
+        return ok;
+    }
+
+    /**
+     * Arquiva a cópia no Google Drive (best-effort): uma falha aqui não derruba o processamento,
+     * pois o storage primário já guardou o PDF.
+     */
+    private void arquivarNoDrive(String accessToken, ResultadoProcessamento r, byte[] pdf) {
+        if (!props.driveConfigurado()) {
+            return;
+        }
+        try {
+            drive.arquivar(accessToken, props.driveFolderId(), r.documento(), pdf);
+        } catch (RuntimeException e) {
+            log.error("Falha ao arquivar no Drive (documento_id={}): {}",
+                    r.documento().getId(), e.getMessage());
+        }
     }
 
     private void marcarProcessada(GmailMensagem msg, String statusMsg) {

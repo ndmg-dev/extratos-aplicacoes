@@ -54,6 +54,10 @@ services:
       EMAIL_REDIRECT_URI: ${EMAIL_REDIRECT_URI:-https://aplicacoes.nucleodigital.cloud/api/email/oauth/callback}
       EMAIL_QUERY: ${EMAIL_QUERY:-}
       EMAIL_POLL_INTERVAL_MS: ${EMAIL_POLL_INTERVAL_MS:-300000}
+      EMAIL_SCOPE: ${EMAIL_SCOPE:-https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive}
+      # Arquivamento no Google Drive (pasta APLICAÇÕES → ANO/MÊS/CNPJ)
+      EMAIL_DRIVE_ENABLED: ${EMAIL_DRIVE_ENABLED:-false}
+      EMAIL_DRIVE_FOLDER_ID: ${EMAIL_DRIVE_FOLDER_ID:-}
     volumes:
       - storage:/app/storage
     expose:
