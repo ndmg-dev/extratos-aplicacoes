@@ -125,7 +125,7 @@ public class GoogleDriveService {
         body.put("mimeType", MIME_FOLDER);
         ArrayNode parents = body.putArray("parents");
         parents.add(parentId);
-        JsonNode resp = postJson(accessToken, "/drive/v3/files?fields=id", body.toString());
+        JsonNode resp = postJson(accessToken, "/drive/v3/files?fields=id&supportsAllDrives=true", body.toString());
         return resp.get("id").asText();
     }
 
@@ -143,12 +143,12 @@ public class GoogleDriveService {
         meta.put("name", nome);
         ArrayNode parents = meta.putArray("parents");
         parents.add(parentId);
-        JsonNode criado = postJson(accessToken, "/drive/v3/files?fields=id", meta.toString());
+        JsonNode criado = postJson(accessToken, "/drive/v3/files?fields=id&supportsAllDrives=true", meta.toString());
         String id = criado.get("id").asText();
 
         try {
             http.patch()
-                    .uri("/upload/drive/v3/files/" + id + "?uploadType=media")
+                    .uri("/upload/drive/v3/files/" + id + "?uploadType=media&supportsAllDrives=true")
                     .header("Authorization", "Bearer " + accessToken)
                     .contentType(MediaType.APPLICATION_PDF)
                     .body(pdf)
@@ -174,6 +174,9 @@ public class GoogleDriveService {
                             .queryParam("fields", "files(id,name)")
                             .queryParam("spaces", "drive")
                             .queryParam("pageSize", 10)
+                            // Suporta Drives Compartilhados (Shared Drives) além do My Drive.
+                            .queryParam("supportsAllDrives", true)
+                            .queryParam("includeItemsFromAllDrives", true)
                             .build())
                     .header("Authorization", "Bearer " + accessToken)
                     .retrieve()
